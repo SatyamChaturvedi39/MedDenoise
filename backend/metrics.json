@@ -1,0 +1,15 @@
+{
+  "psnr_noisy": 11.835,
+  "psnr_denoised": 25.8259,
+  "psnr_improvement": 13.9909,
+  "ssim_noisy": 0.1077,
+  "ssim_denoised": 0.7288,
+  "noise_factor": 0.3,
+  "input_size": "128×128×1",
+  "bottleneck": "32×32×128 = 131,072 values",
+  "compression_ratio": 0.12,
+  "architecture": "128×128×1 → Conv(32) → Pool → Conv(64) → Pool → Conv(128) → 32×32 Bottleneck → Up → Conv(64) → Up → Conv(32) → Conv(1)",
+  "total_params": 186497,
+  "training_loss": 0.002663,
+  "dataset": "Kaggle Chest X-Ray Pneumonia (resized to 128×128)"
+}
