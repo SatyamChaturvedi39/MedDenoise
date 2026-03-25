@@ -5,7 +5,7 @@ import {
   Tooltip, ResponsiveContainer, Cell
 } from "recharts";
 
-const API = "http://localhost:5000/api";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // ── Fonts ─────────────────────────────────────────────────────────
 const fontLink = document.createElement("link");
@@ -291,9 +291,22 @@ function Denoiser() {
 function Dashboard({ metrics }) {
   if (!metrics) return <div style={{ ...styles.mono, color: '#6b7280', padding: 40, textAlign: 'center' }}>Loading...</div>;
 
-  const barData = [
-    { name: 'Noisy', psnr: metrics.psnr_noisy, ssim: metrics.ssim_noisy },
-    { name: 'Denoised', psnr: metrics.psnr_denoised, ssim: metrics.ssim_denoised }
+  // Support both flat (old) and nested (new) metrics.json formats
+  const ev = metrics.evaluation?.gaussian || metrics;
+  const evSP = metrics.evaluation?.salt_pepper;
+  const evBlock = metrics.evaluation?.block_corrupt;
+  const training = metrics.training || {};
+  const dataset = metrics.dataset || {};
+
+  // Bar chart: compare all noise types if available
+  const hasMultiNoise = evSP && evBlock;
+  const barData = hasMultiNoise ? [
+    { name: 'Gaussian', psnr_before: ev.psnr_noisy, psnr_after: ev.psnr_denoised, ssim_before: ev.ssim_noisy, ssim_after: ev.ssim_denoised },
+    { name: 'Salt & Pepper', psnr_before: evSP.psnr_noisy, psnr_after: evSP.psnr_denoised, ssim_before: evSP.ssim_noisy, ssim_after: evSP.ssim_denoised },
+    { name: 'Block Corrupt', psnr_before: evBlock.psnr_noisy, psnr_after: evBlock.psnr_denoised, ssim_before: evBlock.ssim_noisy, ssim_after: evBlock.ssim_denoised },
+  ] : [
+    { name: 'Noisy', psnr: ev.psnr_noisy, ssim: ev.ssim_noisy },
+    { name: 'Denoised', psnr: ev.psnr_denoised, ssim: ev.ssim_denoised }
   ];
 
   return (
@@ -303,19 +316,20 @@ function Dashboard({ metrics }) {
           Model Dashboard
         </h2>
         <p style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.7, margin: 0 }}>
-          Evaluation on test set from Kaggle Chest X-Ray Pneumonia dataset (128×128 grayscale).
-          Source: Guangzhou Women & Children's Medical Center.
+          Evaluation on test set from {dataset.name || 'Kaggle Chest X-Ray Pneumonia dataset'} ({metrics.input_size || '128×128×1'}).
+          {dataset.source ? ` Source: ${dataset.source}.` : ''}
+          {training.noise_type ? ` Trained with ${training.noise_type} noise.` : ''}
         </p>
       </div>
 
-      {/* Metric cards */}
+      {/* Metric cards — primary (Gaussian) evaluation */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
-          { label: 'PSNR Noisy', val: `${metrics.psnr_noisy} dB`, color: '#f87171' },
-          { label: 'PSNR Denoised', val: `${metrics.psnr_denoised} dB`, color: '#34d399' },
-          { label: 'PSNR Gain', val: `+${metrics.psnr_improvement} dB`, color: '#60a5fa' },
-          { label: 'SSIM Noisy', val: metrics.ssim_noisy, color: '#f87171' },
-          { label: 'SSIM Denoised', val: metrics.ssim_denoised, color: '#34d399' },
+          { label: 'PSNR Before', val: `${ev.psnr_noisy} dB`, color: '#f87171' },
+          { label: 'PSNR After', val: `${ev.psnr_denoised} dB`, color: '#34d399' },
+          { label: 'PSNR Gain', val: `+${ev.psnr_gain || (ev.psnr_denoised - ev.psnr_noisy).toFixed(2)} dB`, color: '#60a5fa' },
+          { label: 'SSIM After', val: ev.ssim_denoised, color: '#34d399' },
+          { label: 'Noise Removed', val: `${ev.noise_reduction_pct || '—'}%`, color: '#60a5fa' },
           { label: 'Parameters', val: metrics.total_params?.toLocaleString(), color: '#f59e0b' },
         ].map(c => (
           <div key={c.label} style={styles.metricCard}>
@@ -325,35 +339,69 @@ function Dashboard({ metrics }) {
         ))}
       </div>
 
-      {/* PSNR & SSIM bar charts side by side */}
+      {/* Per-noise-type evaluation table (if available) */}
+      {hasMultiNoise && (
+        <div style={styles.card}>
+          <div style={styles.label}>Evaluation Across All Noise Types</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', ...styles.mono, fontSize: 12 }}>
+            <thead>
+              <tr style={{ color: '#9ca3af', borderBottom: '1px solid #2a2d3a' }}>
+                {['Noise Type', 'PSNR Before', 'PSNR After', 'Gain', 'SSIM Before', 'SSIM After', 'Noise Removed', 'Px Accuracy'].map(h => (
+                  <th key={h} style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 500 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[ev, evSP, evBlock].map(r => (
+                <tr key={r.noise_type} style={{ borderBottom: '1px solid #1e2030' }}>
+                  <td style={{ padding: '8px 6px', color: '#d1d5db', textAlign: 'right' }}>{r.noise_type}</td>
+                  <td style={{ padding: '8px 6px', color: '#f87171', textAlign: 'right' }}>{r.psnr_noisy}</td>
+                  <td style={{ padding: '8px 6px', color: '#34d399', textAlign: 'right' }}>{r.psnr_denoised}</td>
+                  <td style={{ padding: '8px 6px', color: '#60a5fa', textAlign: 'right' }}>+{r.psnr_gain}</td>
+                  <td style={{ padding: '8px 6px', color: '#f87171', textAlign: 'right' }}>{r.ssim_noisy}</td>
+                  <td style={{ padding: '8px 6px', color: '#34d399', textAlign: 'right' }}>{r.ssim_denoised}</td>
+                  <td style={{ padding: '8px 6px', color: '#60a5fa', textAlign: 'right' }}>{r.noise_reduction_pct}%</td>
+                  <td style={{ padding: '8px 6px', color: '#f59e0b', textAlign: 'right' }}>{r.pixel_accuracy}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* PSNR & SSIM bar charts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div style={styles.card}>
           <div style={styles.label}>PSNR Comparison (dB) — Higher is Better</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData} barSize={50}>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={barData} barSize={hasMultiNoise ? 30 : 50}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" />
-              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip contentStyle={{ background: '#1e2030', border: '1px solid #2a2d3a', borderRadius: 6, color: '#d1d5db' }} />
-              <Bar dataKey="psnr" radius={[4, 4, 0, 0]}>
-                <Cell fill="#f87171" />
-                <Cell fill="#34d399" />
-              </Bar>
+              {hasMultiNoise ? (<>
+                <Bar dataKey="psnr_before" name="Before" fill="#f87171" radius={[4,4,0,0]} />
+                <Bar dataKey="psnr_after" name="After" fill="#34d399" radius={[4,4,0,0]} />
+              </>) : (<Bar dataKey="psnr" radius={[4, 4, 0, 0]}>
+                <Cell fill="#f87171" /><Cell fill="#34d399" />
+              </Bar>)}
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div style={styles.card}>
           <div style={styles.label}>SSIM Comparison — Higher is Better</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={barData} barSize={50}>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={barData} barSize={hasMultiNoise ? 30 : 50}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" />
-              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
+              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <YAxis domain={[0, 1]} tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip contentStyle={{ background: '#1e2030', border: '1px solid #2a2d3a', borderRadius: 6, color: '#d1d5db' }} />
-              <Bar dataKey="ssim" radius={[4, 4, 0, 0]}>
-                <Cell fill="#f87171" />
-                <Cell fill="#34d399" />
-              </Bar>
+              {hasMultiNoise ? (<>
+                <Bar dataKey="ssim_before" name="Before" fill="#f87171" radius={[4,4,0,0]} />
+                <Bar dataKey="ssim_after" name="After" fill="#34d399" radius={[4,4,0,0]} />
+              </>) : (<Bar dataKey="ssim" radius={[4, 4, 0, 0]}>
+                <Cell fill="#f87171" /><Cell fill="#34d399" />
+              </Bar>)}
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -364,21 +412,21 @@ function Dashboard({ metrics }) {
         <div style={styles.label}>Architecture — Convolutional Denoising Autoencoder</div>
         <div style={{ ...styles.mono, fontSize: 12, lineHeight: 2.2, color: '#d1d5db' }}>
           {[
-            ['INPUT', '128×128×1', '#f3f4f6', 'noisy grayscale X-ray'],
-            ['Conv2D', '128×128×32', '#60a5fa', '32 filters, 3×3, ReLU + BN'],
-            ['MaxPool', '64×64×32', '#6b7280', '2×2 → halves spatial dims'],
-            ['Conv2D', '64×64×64', '#60a5fa', '64 filters, 3×3, ReLU + BN'],
-            ['MaxPool', '32×32×64', '#6b7280', '2×2 → halves again'],
-            ['BOTTLENECK', '32×32×128', '#f59e0b', '← 131,072 compressed values'],
-            ['Conv2D', '32×32×64', '#60a5fa', 'decode: 64 filters'],
-            ['UpSample', '64×64×64', '#6b7280', '2×2 → doubles spatial dims'],
-            ['Conv2D', '64×64×32', '#60a5fa', '32 filters, 3×3, ReLU + BN'],
-            ['UpSample', '128×128×32', '#6b7280', '2×2 → restore original size'],
-            ['OUTPUT', '128×128×1', '#34d399', 'sigmoid → clean reconstruction'],
+            ['INPUT',       '128×128×1',  '#f3f4f6', 'noisy grayscale X-ray'],
+            ['Conv2D ×2',   '128×128×32', '#60a5fa', '32 filters, 3×3, ReLU + BN'],
+            ['MaxPool',      '64×64×32',  '#6b7280', '2×2 → halves spatial dims'],
+            ['Conv2D ×2',    '64×64×64',  '#60a5fa', '64 filters, 3×3, ReLU + BN'],
+            ['MaxPool',      '32×32×64',  '#6b7280', '2×2 → halves again'],
+            ['BOTTLENECK',   '32×32×128', '#f59e0b', '← 131,072 values + Dropout(0.1)'],
+            ['Conv2D ×2',    '32×32×64',  '#60a5fa', 'decode: 64 filters + BN'],
+            ['UpSample',     '64×64×64',  '#6b7280', '2×2 → doubles spatial dims'],
+            ['Conv2D ×2',    '64×64×32',  '#60a5fa', '32 filters, 3×3, ReLU + BN'],
+            ['UpSample',    '128×128×32', '#6b7280', '2×2 → restore original size'],
+            ['OUTPUT',      '128×128×1',  '#34d399', 'sigmoid → clean reconstruction'],
           ].map(([stage, shape, color, note]) => (
             <div key={stage + shape} style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
               <span style={{ color, minWidth: 90, fontWeight: 600 }}>{stage}</span>
-              <span style={{ color: '#6b7280', minWidth: 90 }}>{shape}</span>
+              <span style={{ color: '#6b7280', minWidth: 100 }}>{shape}</span>
               <span style={{ color: '#4b5563', fontSize: 11 }}>// {note}</span>
             </div>
           ))}
