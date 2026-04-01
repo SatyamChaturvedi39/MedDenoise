@@ -16,10 +16,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Model files (too large for GitHub — download from Colab after training)
-*.h5
-*.keras
-
 # Python
 __pycache__/
 *.pyc
