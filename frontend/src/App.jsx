@@ -227,10 +227,16 @@ function Denoiser() {
     form.append('image', selectedFile);
     form.append('noise_type', noiseType);
     try {
-      const res = await axios.post(`${API}/denoise`, form);
+      const res = await axios.post(`${API}/denoise`, form, { timeout: 90000 });
       setResult(res.data);
-    } catch {
-      setError('Denoising failed — is the backend running on port 5000?');
+    } catch (err) {
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setError('Request timed out — the backend may be waking up (Render cold start). Wait 30 seconds and try again.');
+      } else if (err.response) {
+        setError(`Server error ${err.response.status}: ${err.response.data?.error || err.response.statusText}`);
+      } else {
+        setError(`Connection failed: ${err.message} — check that the backend is running.`);
+      }
     } finally {
       setLoading(false);
     }
