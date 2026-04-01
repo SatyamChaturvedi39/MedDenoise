@@ -11,7 +11,12 @@ from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 # ── Load model and metrics once on startup ─────────────────────────
 print("Loading medical denoising model...")
