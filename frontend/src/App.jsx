@@ -267,7 +267,7 @@ function Denoiser() {
         onClick={() => inputRef.current?.click()}
         style={{ marginBottom: 18 }}
       >
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🩻</div>
+        <div style={{ fontSize: 32, marginBottom: 12, color: '#38bdf8' }}>⊕</div>
         <div style={{ fontSize: 15, fontWeight: 600, color: '#c9d1e0', marginBottom: 6 }}>
           {preview ? 'Click to change image' : 'Drop a chest X-ray here'}
         </div>
@@ -573,7 +573,7 @@ export default function App() {
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 58 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#1d4ed8,#0ea5e9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🩻</div>
+              <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#1d4ed8,#0ea5e9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: 'white', fontFamily: 'Space Grotesk' }}>Md</div>
               <span style={{ ...mono, fontSize: 15, fontWeight: 700, color: '#e2e8f0', letterSpacing: '-0.01em' }}>MedDenoise</span>
             </div>
             <span style={{ ...mono, fontSize: 11, color: '#1e2d4a', padding: '3px 10px', background: '#0a1220', border: '1px solid #0f1e34', borderRadius: 20 }}>U-Net · 128×128</span>
@@ -590,7 +590,7 @@ export default function App() {
       {/* Tab bar */}
       <div style={{ background: '#070b14', borderBottom: '1px solid #0f1e34', padding: '0 32px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex' }}>
-          {[{ id: 'denoise', label: '⚕ Image Denoiser' }, { id: 'dashboard', label: '📊 Model Dashboard' }].map(t => (
+          {[{ id: 'denoise', label: 'Image Denoiser' }, { id: 'dashboard', label: 'Model Dashboard' }].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} className={`tab-btn${tab === t.id ? ' active' : ''}`}>{t.label}</button>
           ))}
         </div>
