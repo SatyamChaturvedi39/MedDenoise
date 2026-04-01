@@ -1,6 +1,13 @@
 # 🩺 MedDenoise — Medical Image Denoising System
 
-> A deep learning-powered web application that denoises medical chest X-ray images using a Convolutional Autoencoder, served via a Flask backend and a React frontend.
+> A deep learning-powered web application that denoises medical chest X-ray images using a **U-Net Convolutional Autoencoder with skip connections**, served via a Flask backend and a React frontend.
+
+🔗 **GitHub:** https://github.com/SatyamChaturvedi39/MedDenoise  
+🌐 **Live Demo:** _Deploying soon_
+
+## App Screenshot
+
+![MedDenoise App](assets/app_screenshot.png)
 
 ## Problem Statement
 
@@ -55,54 +62,54 @@ The dataset contains real pediatric chest X-ray images. For denoising, class lab
 
 ## Model Architecture
 
-The model uses a **Convolutional Denoising Autoencoder** that compresses a noisy X-ray into a compact latent representation, then reconstructs the clean version.
+The model uses a **U-Net Denoising Autoencoder** with skip connections — a major upgrade over a plain autoencoder. Skip connections pass encoder features directly to the decoder, preserving fine anatomical structures (rib edges, bronchial patterns) that a bottleneck-only model would lose.
 
-### Why a Convolutional Autoencoder?
+### Why U-Net over a Plain Autoencoder?
 
-Convolutional layers preserve spatial structure — X-rays have strong spatial patterns (ribs, lung boundaries, cardiac silhouette) that dense layers would destroy. The autoencoder's compression bottleneck forces the network to learn the most important anatomical features, filtering out noise as "unimportant" information. This is unsupervised — no labelled clean/noisy pairs from hospitals are needed.
+A standard autoencoder forces ALL information through a narrow bottleneck — fine details like hairline fractures and subtle pneumonia opacities get destroyed and cannot be recovered. The U-Net adds skip connections that allow the decoder to directly access high-resolution encoder features, so it only needs to learn the *residual difference* rather than reconstruct everything from scratch.
 
 ### Architecture Stack
 
 ```
-Input (128 × 128 × 1)
+Input (128 × 128 × 1)  [noisy grayscale X-ray]
 ↓
-Conv2D (32 filters, 3×3, ReLU) + BatchNormalization
-  Extracts low-level features: edges, textures
+[Conv2D × 2 (32 filters, 3×3) + BatchNorm + ReLU]  ──── skip1
+  Low-level features: edges, textures
 ↓
 MaxPooling2D (2×2) — 128×128 → 64×64
 ↓
-Conv2D (64 filters, 3×3, ReLU) + BatchNormalization
-  Extracts mid-level features: rib patterns, boundaries
+[Conv2D × 2 (64 filters, 3×3) + BatchNorm + ReLU]  ──── skip2
+  Mid-level features: rib patterns, lung boundaries
 ↓
 MaxPooling2D (2×2) — 64×64 → 32×32
 ↓
-Conv2D (128 filters, 3×3, ReLU) + BatchNormalization
+[Conv2D × 2 (128 filters, 3×3) + BatchNorm + Dropout(0.15)]
   BOTTLENECK — 32×32×128 = 131,072 compressed values
 ↓
-Conv2D (64 filters, 3×3, ReLU) + BatchNormalization
+UpSampling2D (2×2) → Concatenate(skip2)  [64×64 × 192ch]
 ↓
-UpSampling2D (2×2) — 32×32 → 64×64
+[Conv2D × 2 (64 filters, 3×3) + BatchNorm + ReLU]
 ↓
-Conv2D (32 filters, 3×3, ReLU) + BatchNormalization
+UpSampling2D (2×2) → Concatenate(skip1)  [128×128 × 96ch]
 ↓
-UpSampling2D (2×2) — 64×64 → 128×128
+[Conv2D × 2 (32 filters, 3×3) + BatchNorm + ReLU]
 ↓
-Conv2D (1 filter, 3×3, Sigmoid)
+Conv2D (1 filter, 1×1, Sigmoid)
 ↓
-Output: probability distribution over pixel intensities (128 × 128 × 1)
+Output: clean reconstructed X-ray (128 × 128 × 1)
 ```
 
 ### Parameter Summary
 
-| Layer | Parameters | Trainable |
-|-------|-----------|-----------|
-| Conv2D (32) + BN | 448 | Yes |
-| Conv2D (64) + BN | 18,624 | Yes |
-| Conv2D (128) + BN | 74,112 | Yes |
-| Conv2D (64) + BN | 73,856 | Yes |
-| Conv2D (32) + BN | 18,528 | Yes |
-| Conv2D (1) | 289 | Yes |
-| **Total** | **186,497** | **All** |
+| Component | Role | Filters |
+|-----------|------|---------|
+| Encoder Block 1 (×2 Conv) | Low-level features + skip1 | 32 |
+| Encoder Block 2 (×2 Conv) | Mid-level features + skip2 | 64 |
+| Bottleneck (×2 Conv + Dropout) | Compressed latent space | 128 |
+| Decoder Block 1 (×2 Conv + skip2) | Coarse reconstruction | 64 |
+| Decoder Block 2 (×2 Conv + skip1) | Fine detail recovery | 32 |
+| Output Conv | Pixel intensity prediction | 1 (sigmoid) |
+| **Total Parameters** | | **~473,537** |
 
 ## How the Model Was Trained (Google Colab)
 
@@ -130,11 +137,20 @@ path = kagglehub.dataset_download("paultimothymooney/chest-xray-pneumonia")
 | Setting | Value |
 |---------|-------|
 | Optimizer | Adam (lr=0.001) |
-| Loss Function | Mean Squared Error (MSE) |
-| Epochs | 15 (with EarlyStopping, patience=7) |
-| Batch Size | 32 |
-| LR Scheduler | ReduceLROnPlateau (factor=0.5, patience=3) |
-| Noise Factor | 0.3 (Gaussian) |
+| Loss Function | **0.5 × MSE + 0.5 × (1 − SSIM)** — sharper reconstructions than MSE alone |
+| Epochs | Up to 50 (EarlyStopping patience=10, stopped at ~44) |
+| Batch Size | 16 |
+| LR Scheduler | ReduceLROnPlateau (factor=0.5, patience=5) |
+| Noise Training | **Mixed**: Gaussian (σ=0.15–0.45) + Salt & Pepper + Block Corruption |
+| Architecture | **U-Net with skip connections** — preserves fine anatomical detail |
+
+### Achieved Metrics (on Kaggle test set)
+
+| Noise Type | PSNR Before | PSNR After | SSIM Before | SSIM After |
+|-----------|-------------|------------|-------------|------------|
+| Gaussian (σ=0.3) | ~23 dB | **~33 dB** | ~0.45 | **~0.97** |
+| Salt & Pepper | ~20 dB | **~44 dB** | ~0.33 | **~0.97** |
+| Block Corruption | ~26 dB | **~41 dB** | ~0.64 | **~0.97** |
 
 ### Why `.h5` format?
 
@@ -248,3 +264,12 @@ npm run dev
 ```
 
 Open: http://localhost:5173
+
+## Deployment
+
+| Service | Platform | URL |
+|---------|----------|-----|
+| Backend (Flask API) | Render (free tier) | _Deploying_ |
+| Frontend (React) | Vercel (free tier) | _Deploying_ |
+
+The frontend reads the backend URL from the `VITE_API_URL` environment variable at build time.

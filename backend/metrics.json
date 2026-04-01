@@ -1,15 +1,67 @@
 {
-  "psnr_noisy": 11.835,
-  "psnr_denoised": 25.8259,
-  "psnr_improvement": 13.9909,
-  "ssim_noisy": 0.1077,
-  "ssim_denoised": 0.7288,
-  "noise_factor": 0.3,
-  "input_size": "128×128×1",
-  "bottleneck": "32×32×128 = 131,072 values",
-  "compression_ratio": 0.12,
-  "architecture": "128×128×1 → Conv(32) → Pool → Conv(64) → Pool → Conv(128) → 32×32 Bottleneck → Up → Conv(64) → Up → Conv(32) → Conv(1)",
-  "total_params": 186497,
-  "training_loss": 0.002663,
-  "dataset": "Kaggle Chest X-Ray Pneumonia (resized to 128×128)"
+  "model_name": "unet_medical_denoiser",
+  "input_size": "128\u00d7128\u00d71",
+  "bottleneck": "32\u00d732\u00d7128 = 131,072 values",
+  "compression_ratio": 0.125,
+  "total_params": 473537,
+  "architecture": "U-Net: 128\u00d7128\u00d71 \u2192 [Conv32\u00d72+BN] \u2192 Pool(skip1) \u2192 [Conv64\u00d72+BN] \u2192 Pool(skip2) \u2192 [Conv128\u00d72+BN+Drop] \u2192 Up+skip2 \u2192 [Conv64\u00d72] \u2192 Up+skip1 \u2192 [Conv32\u00d72] \u2192 Conv1(sigmoid)",
+  "skip_connections": true,
+  "training": {
+    "epochs_run": 43,
+    "batch_size": 16,
+    "optimizer": "Adam (lr=1e-3)",
+    "loss": "0.5*MSE + 0.5*(1-SSIM)",
+    "noise_type": "Mixed (Gaussian + Salt&Pepper + Block)",
+    "augmentation": "3\u00d7 (flip, brightness, contrast)",
+    "training_images": 15648,
+    "best_val_loss": 0.112303
+  },
+  "dataset": {
+    "name": "Kaggle Chest X-Ray Pneumonia",
+    "source": "Guangzhou Women and Children's Medical Center",
+    "train_images": 5216,
+    "test_images": 640,
+    "resolution": "128\u00d7128 grayscale"
+  },
+  "evaluation": {
+    "gaussian": {
+      "noise_type": "Gaussian (\u03c3=0.3)",
+      "psnr_noisy": 11.83,
+      "psnr_denoised": 26.17,
+      "psnr_gain": 14.34,
+      "ssim_noisy": 0.1074,
+      "ssim_denoised": 0.7783,
+      "ssim_gain": 0.6709,
+      "mse_noisy": 0.06559,
+      "mse_denoised": 0.002454,
+      "noise_reduction_pct": 96.3,
+      "pixel_accuracy": 95.1
+    },
+    "salt_pepper": {
+      "noise_type": "Salt & Pepper (6%)",
+      "psnr_noisy": 17.43,
+      "psnr_denoised": 41.88,
+      "psnr_gain": 24.44,
+      "ssim_noisy": 0.3757,
+      "ssim_denoised": 0.9966,
+      "ssim_gain": 0.6209,
+      "mse_noisy": 0.018086,
+      "mse_denoised": 7e-05,
+      "noise_reduction_pct": 99.6,
+      "pixel_accuracy": 100.0
+    },
+    "block_corrupt": {
+      "noise_type": "Block Corruption",
+      "psnr_noisy": 18.73,
+      "psnr_denoised": 39.37,
+      "psnr_gain": 20.64,
+      "ssim_noisy": 0.8948,
+      "ssim_denoised": 0.9906,
+      "ssim_gain": 0.0958,
+      "mse_noisy": 0.014086,
+      "mse_denoised": 0.000132,
+      "noise_reduction_pct": 99.1,
+      "pixel_accuracy": 99.8
+    }
+  }
 }
