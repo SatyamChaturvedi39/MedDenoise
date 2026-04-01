@@ -3,7 +3,7 @@
 > A deep learning-powered web application that denoises medical chest X-ray images using a **U-Net Convolutional Autoencoder with skip connections**, served via a Flask backend and a React frontend.
 
 🔗 **GitHub:** https://github.com/SatyamChaturvedi39/MedDenoise  
-🌐 **Live Demo:** _Deploying soon_
+🌐 **Live Demo:** https://med-denoise.vercel.app
 
 ## App Screenshot
 
